@@ -51,7 +51,7 @@ init(){if(this.c){if(this.c.state==='suspended')this.c.resume();return;}
  const len=c.sampleRate;const b=c.createBuffer(1,len,c.sampleRate);const d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.nb=b;
  if(MUS.want)MUS.start(MUS.want);
 },
-toggle(){this.muted=!this.muted;if(this.m)this.m.gain.value=this.muted?0:.55;if(this.muted)VO.hush();if(SONG.el){if(this.muted)SONG.el.pause();else if(MUS.want==="chase"||MUS.want==="boss")SONG.el.play().catch(()=>{});}},
+toggle(){this.muted=!this.muted;if(this.m)this.m.gain.value=this.muted?0:.55;if(this.muted)VO.hush();if(SONG.el){if(this.muted)SONG.el.pause();else if(SONG.ok)SONG.el.play().catch(()=>{});}},
 tone(type,f0,f1,dur,vol=.3,delay=0,dest){const c=this.c;if(!c)return null;const t=c.currentTime+Math.max(0,delay);const o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);if(f1&&f1!==f0)o.frequency.exponentialRampToValueAtTime(f1,t+dur);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+Math.min(.02,dur/3));g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(dest||this.s);o.start(t);o.stop(t+dur+.05);return o;},
 noise(dur,vol,ft,f0,f1,delay=0,q=1,dest){const c=this.c;if(!c)return;const t=c.currentTime+Math.max(0,delay);const src=c.createBufferSource();src.buffer=this.nb;src.loop=true;const f=c.createBiquadFilter();f.type=ft;f.Q.value=q;f.frequency.setValueAtTime(f0,t);if(f1)f.frequency.exponentialRampToValueAtTime(f1,t+dur);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0001,t+dur);src.connect(f);f.connect(g);g.connect(dest||this.s);src.start(t,Math.random()*.5);src.stop(t+dur+.05);},
 voice(dur,pitch){const c=this.c,t=c.currentTime;const o=c.createOscillator();o.type='sawtooth';const base=170*pitch;o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.8,t+dur*.3);o.frequency.linearRampToValueAtTime(base*1.5,t+dur*.7);o.frequency.linearRampToValueAtTime(base*.9,t+dur);const f=c.createBiquadFilter();f.type='bandpass';f.Q.value=4;f.frequency.setValueAtTime(700,t);f.frequency.linearRampToValueAtTime(1300,t+dur*.4);f.frequency.linearRampToValueAtTime(600,t+dur);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.4,t+.03);g.gain.setValueAtTime(.4,t+dur*.8);g.gain.exponentialRampToValueAtTime(.0001,t+dur);const l=c.createOscillator(),lg=c.createGain();l.frequency.value=7;lg.gain.value=base*.07;l.connect(lg);lg.connect(o.frequency);o.connect(f);f.connect(g);g.connect(this.s);o.start(t);l.start(t);o.stop(t+dur+.05);l.stop(t+dur+.05);},
@@ -136,12 +136,12 @@ const PATS={
  saray:{bpm:100,sc:SCL.rast,root:293.66,mel:[0,_,2,_,4,_,4,5,4,_,2,_,0,_,_,_,4,_,5,_,7,_,7,5,4,_,2,_,4,_,_,_],bass:[0,_,_,_,0,_,_,_,3,_,_,_,4,_,_,_,0,_,_,_,3,_,_,_,4,_,_,_,0,_,_,_],drum:'D.D.DttD'},
 };
 // yerel özel şarkı (sadece bilgisayarda varsa çalar; yayındaki sitede dosya yok, sessizce atlanır)
-const SONG={el:null,ok:false,init(){const a=new Audio("muzik/ozel.mp3");a.loop=true;a.preload="auto";a.volume=.45;a.addEventListener("canplaythrough",()=>{this.ok=true;},{once:true});a.addEventListener("error",()=>{this.ok=false;});this.el=a;},
+const SONG={el:null,ok:false,init(){const a=new Audio("muzik/ozel.mp3");a.loop=true;a.preload="auto";a.volume=.45;a.addEventListener("canplaythrough",()=>{this.ok=true;MUS.on=false;if(AU.c&&!AU.muted)a.play().catch(()=>{});},{once:true});a.addEventListener("error",()=>{this.ok=false;});this.el=a;},
  play(){if(!this.ok||AU.muted)return;this.el.currentTime=0;this.el.play().catch(()=>{});},stop(){if(this.el&&!this.el.paused)this.el.pause();}};
 SONG.init();
 const MUS={on:false,want:null,
- start(n){const prev=this.want;this.want=n;if((n==="chase"||n==="boss")&&SONG.ok){this.on=false;if(n==="chase"||prev!=="chase")SONG.play();return;}SONG.stop();if(!AU.c)return;this.p=PATS[n];this.step=0;this.next=AU.c.currentTime+.05;this.on=true;},
- stop(){this.on=false;this.want=null;SONG.stop();},
+ start(n){this.want=n;if(SONG.ok){this.on=false;if(SONG.el.paused&&!AU.muted)SONG.el.play().catch(()=>{});return;}if(!AU.c)return;this.p=PATS[n];this.step=0;this.next=AU.c.currentTime+.05;this.on=true;},
+ stop(){this.on=false;this.want=null;},
  tick(){if(!this.on||!AU.c)return;const c=AU.c,p=this.p,sd=60/p.bpm/2;if(this.next<c.currentTime)this.next=c.currentTime+.05;
   while(this.next<c.currentTime+.15){const i=this.step,dl=this.next-c.currentTime;
    const m=p.mel[i%p.mel.length];if(m!=null)AU.tone('square',nf(m,p),null,sd*.9,.16,dl,AU.mu);
