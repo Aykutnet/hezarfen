@@ -140,7 +140,8 @@ const SONG={el:null,ok:false,init(){const a=new Audio("muzik/ozel.mp3");a.loop=t
  play(){if(!this.ok||AU.muted)return;this.el.currentTime=0;this.el.play().catch(()=>{});},stop(){if(this.el&&!this.el.paused)this.el.pause();}};
 SONG.init();
 const MUS={on:false,want:null,
- start(n){this.want=n;if(SONG.ok){this.on=false;if(SONG.el.paused&&!AU.muted)SONG.el.play().catch(()=>{});return;}if(!AU.c)return;this.p=PATS[n];this.step=0;this.next=AU.c.currentTime+.05;this.on=true;},
+ start(n){this.want=n;this.on=false;if(SONG.ok&&SONG.el.paused&&!AU.muted)SONG.el.play().catch(()=>{});return;// sentez müzik kapalı: sadece yerel şarkı çalar
+ if(!AU.c)return;this.p=PATS[n];this.step=0;this.next=AU.c.currentTime+.05;this.on=true;},
  stop(){this.on=false;this.want=null;},
  tick(){if(!this.on||!AU.c)return;const c=AU.c,p=this.p,sd=60/p.bpm/2;if(this.next<c.currentTime)this.next=c.currentTime+.05;
   while(this.next<c.currentTime+.15){const i=this.step,dl=this.next-c.currentTime;
