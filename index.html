@@ -51,7 +51,7 @@ init(){if(this.c){if(this.c.state==='suspended')this.c.resume();return;}
  const len=c.sampleRate;const b=c.createBuffer(1,len,c.sampleRate);const d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.nb=b;
  if(MUS.want)MUS.start(MUS.want);
 },
-toggle(){this.muted=!this.muted;if(this.m)this.m.gain.value=this.muted?0:.55;if(this.muted&&window.speechSynthesis)speechSynthesis.cancel();if(SONG.el){if(this.muted)SONG.el.pause();else if(MUS.want==="chase"||MUS.want==="boss")SONG.el.play().catch(()=>{});}},
+toggle(){this.muted=!this.muted;if(this.m)this.m.gain.value=this.muted?0:.55;if(this.muted)VO.hush();if(SONG.el){if(this.muted)SONG.el.pause();else if(MUS.want==="chase"||MUS.want==="boss")SONG.el.play().catch(()=>{});}},
 tone(type,f0,f1,dur,vol=.3,delay=0,dest){const c=this.c;if(!c)return null;const t=c.currentTime+Math.max(0,delay);const o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);if(f1&&f1!==f0)o.frequency.exponentialRampToValueAtTime(f1,t+dur);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+Math.min(.02,dur/3));g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(dest||this.s);o.start(t);o.stop(t+dur+.05);return o;},
 noise(dur,vol,ft,f0,f1,delay=0,q=1,dest){const c=this.c;if(!c)return;const t=c.currentTime+Math.max(0,delay);const src=c.createBufferSource();src.buffer=this.nb;src.loop=true;const f=c.createBiquadFilter();f.type=ft;f.Q.value=q;f.frequency.setValueAtTime(f0,t);if(f1)f.frequency.exponentialRampToValueAtTime(f1,t+dur);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0001,t+dur);src.connect(f);f.connect(g);g.connect(dest||this.s);src.start(t,Math.random()*.5);src.stop(t+dur+.05);},
 voice(dur,pitch){const c=this.c,t=c.currentTime;const o=c.createOscillator();o.type='sawtooth';const base=170*pitch;o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.8,t+dur*.3);o.frequency.linearRampToValueAtTime(base*1.5,t+dur*.7);o.frequency.linearRampToValueAtTime(base*.9,t+dur);const f=c.createBiquadFilter();f.type='bandpass';f.Q.value=4;f.frequency.setValueAtTime(700,t);f.frequency.linearRampToValueAtTime(1300,t+dur*.4);f.frequency.linearRampToValueAtTime(600,t+dur);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.4,t+.03);g.gain.setValueAtTime(.4,t+dur*.8);g.gain.exponentialRampToValueAtTime(.0001,t+dur);const l=c.createOscillator(),lg=c.createGain();l.frequency.value=7;lg.gain.value=base*.07;l.connect(lg);lg.connect(o.frequency);o.connect(f);f.connect(g);g.connect(this.s);o.start(t);l.start(t);o.stop(t+dur+.05);l.stop(t+dur+.05);},
@@ -99,12 +99,22 @@ AU.babble=function(text,pitch=1,rate=1){const c=this.c;if(!c||this.muted)return 
  return t-st;};
 // [pitch, rate] her karakter için
 const VP={hez:[1,1.05],teyze:[1.6,1.25],amca:[.6,.85],cocuk:[2,1.35],kasap:[.4,.95],bekci:[.9,1.2],balikci:[.75,1],hanim:[1.4,1.15],berber:[1.15,1.35],hamamci:[.55,.9],imam:[.7,.8],boss:[.3,.85],ulak:[1.1,1.25],gull:[2,1.6],fish:[.2,.8],carpet:[1.25,1.1],kaptan:[.6,1],karpuzcu:[1.3,1.45],evliya:[1,.9],ressam:[1.25,.95],anlatici:[.95,1.05],kiz:[1.8,1.1],padisah:[.55,.8]};
-const VO={mode:(()=>{const v=localStorage.getItem('hez_vo');return v==null?2:+v;})(),tr:null,cur:0,until:0,
- init(){if(!('speechSynthesis' in window))return;const pick=()=>{const vs=speechSynthesis.getVoices();this.tr=vs.find(v=>/^tr([-_]|$)/i.test(v.lang))||null;};pick();speechSynthesis.onvoiceschanged=pick;},
- label(){return this.mode===0?'Kapalı':this.mode===1?'Mırıltı':(this.tr?'Gerçek ses':'Gerçek ses (Türkçe ses yok, mırıltı)');},
- cycle(){this.mode=this.mode===0?2:this.mode-1;localStorage.setItem('hez_vo',this.mode);if(this.mode<2&&window.speechSynthesis)speechSynthesis.cancel();},
+// ortak repliklerde konuşana göre oynatma hızı (perde de birlikte değişir)
+const VRATE={teyze:1.25,hanim:1.18,cocuk:1.35,kiz:1.3,kasap:.85,amca:.9,bekci:1.08,balikci:.95,berber:1.12,hamamci:.88,imam:.9,boss:.82,ulak:1.05};
+const VO={mode:(()=>{const v=localStorage.getItem('hez_vo');return v==null?2:+v;})(),tr:null,cur:0,until:0,man:null,aud:null,
+ init(){fetch('voices/manifest.json').then(r=>r.ok?r.json():null).then(m=>{this.man=m;}).catch(()=>{});
+  if(!('speechSynthesis' in window))return;const pick=()=>{const vs=speechSynthesis.getVoices();this.tr=vs.find(v=>/^tr([-_]|$)/i.test(v.lang))||null;};pick();speechSynthesis.onvoiceschanged=pick;},
+ label(){return this.mode===0?'Kapalı':this.mode===1?'Mırıltı':this.man?'Aykut\'un sesi':(this.tr?'Gerçek ses':'Gerçek ses (Türkçe ses yok, mırıltı)');},
+ hush(){if(this.aud)this.aud.pause();if(window.speechSynthesis)speechSynthesis.cancel();},
+ cycle(){this.mode=this.mode===0?2:this.mode-1;localStorage.setItem('hez_vo',this.mode);if(this.mode<2)this.hush();},
  speak(who,text,pri=1){if(!this.mode||AU.muted||!AU.c)return;text=String(text);if(!/[a-zA-ZçğıöşüÇĞİÖŞÜ]/.test(text))return;
-  const p=VP[who]||VP.anlatici,now=performance.now();
+  const p=VP[who]||VP.anlatici,now=performance.now(),busy=this.aud&&!this.aud.paused&&!this.aud.ended;
+  if(busy&&pri<=this.cur)return;
+  if(this.mode===2&&this.man&&this.man[text]){const [f,o]=this.man[text];
+   if(busy)this.aud.pause();if(window.speechSynthesis)speechSynthesis.cancel();
+   const a=new Audio('voices/'+f+'.mp3');if(!o&&VRATE[who]){a.preservesPitch=false;a.mozPreservesPitch=false;a.webkitPreservesPitch=false;a.playbackRate=VRATE[who];}
+   a.volume=1;a.play().catch(()=>{});this.aud=a;this.cur=pri;this.until=now;return;}
+  if(busy)this.aud.pause();
   if(this.mode===2&&this.tr){const ss=speechSynthesis;if((ss.speaking||ss.pending)&&now<this.until+4000){if(pri<=this.cur)return;ss.cancel();}
    const u=new SpeechSynthesisUtterance(text.replace(/[→•…"]/g,' ').toLocaleLowerCase('tr-TR'));u.voice=this.tr;u.lang=this.tr.lang;u.pitch=clamp(p[0],0,2);u.rate=clamp(p[1],.5,2);u.volume=1;this.cur=pri;this.until=now;ss.speak(u);return;}
   if(now<this.until&&pri<=this.cur)return;this.cur=pri;this.until=now+AU.babble(text,.35+p[0]*.65,p[1])*1000;}
