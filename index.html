@@ -51,7 +51,7 @@ init(){if(this.c){if(this.c.state==='suspended')this.c.resume();return;}
  const len=c.sampleRate;const b=c.createBuffer(1,len,c.sampleRate);const d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.nb=b;
  if(MUS.want)MUS.start(MUS.want);
 },
-toggle(){this.muted=!this.muted;if(this.m)this.m.gain.value=this.muted?0:.55;if(this.muted)VO.hush();if(SONG.el){if(this.muted)SONG.el.pause();else if(SONG.ok)SONG.el.play().catch(()=>{});}},
+toggle(){this.muted=!this.muted;if(this.m)this.m.gain.value=this.muted?0:.55;if(this.muted){VO.hush();BGM.pause();INTRO.stop();}else BGM.resume();},
 tone(type,f0,f1,dur,vol=.3,delay=0,dest){const c=this.c;if(!c)return null;const t=c.currentTime+Math.max(0,delay);const o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);if(f1&&f1!==f0)o.frequency.exponentialRampToValueAtTime(f1,t+dur);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+Math.min(.02,dur/3));g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(dest||this.s);o.start(t);o.stop(t+dur+.05);return o;},
 noise(dur,vol,ft,f0,f1,delay=0,q=1,dest){const c=this.c;if(!c)return;const t=c.currentTime+Math.max(0,delay);const src=c.createBufferSource();src.buffer=this.nb;src.loop=true;const f=c.createBiquadFilter();f.type=ft;f.Q.value=q;f.frequency.setValueAtTime(f0,t);if(f1)f.frequency.exponentialRampToValueAtTime(f1,t+dur);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0001,t+dur);src.connect(f);f.connect(g);g.connect(dest||this.s);src.start(t,Math.random()*.5);src.stop(t+dur+.05);},
 voice(dur,pitch){const c=this.c,t=c.currentTime;const o=c.createOscillator();o.type='sawtooth';const base=170*pitch;o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.8,t+dur*.3);o.frequency.linearRampToValueAtTime(base*1.5,t+dur*.7);o.frequency.linearRampToValueAtTime(base*.9,t+dur);const f=c.createBiquadFilter();f.type='bandpass';f.Q.value=4;f.frequency.setValueAtTime(700,t);f.frequency.linearRampToValueAtTime(1300,t+dur*.4);f.frequency.linearRampToValueAtTime(600,t+dur);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.4,t+.03);g.gain.setValueAtTime(.4,t+dur*.8);g.gain.exponentialRampToValueAtTime(.0001,t+dur);const l=c.createOscillator(),lg=c.createGain();l.frequency.value=7;lg.gain.value=base*.07;l.connect(lg);lg.connect(o.frequency);o.connect(f);f.connect(g);g.connect(this.s);o.start(t);l.start(t);o.stop(t+dur+.05);l.stop(t+dur+.05);},
@@ -136,13 +136,27 @@ const PATS={
  saray:{bpm:100,sc:SCL.rast,root:293.66,mel:[0,_,2,_,4,_,4,5,4,_,2,_,0,_,_,_,4,_,5,_,7,_,7,5,4,_,2,_,4,_,_,_],bass:[0,_,_,_,0,_,_,_,3,_,_,_,4,_,_,_,0,_,_,_,3,_,_,_,4,_,_,_,0,_,_,_],drum:'D.D.DttD'},
 };
 // yerel özel şarkı (sadece bilgisayarda varsa çalar; yayındaki sitede dosya yok, sessizce atlanır)
-const SONG={el:null,ok:false,init(){const a=new Audio("muzik/ozel.mp3");a.loop=true;a.preload="auto";a.volume=.45;a.addEventListener("canplaythrough",()=>{this.ok=true;MUS.on=false;if(AU.c&&!AU.muted)a.play().catch(()=>{});},{once:true});a.addEventListener("error",()=>{this.ok=false;});this.el=a;},
- play(){if(!this.ok||AU.muted)return;this.el.currentTime=0;this.el.play().catch(()=>{});},stop(){if(this.el&&!this.el.paused)this.el.pause();}};
+const SONG={el:null,ok:false,init(){const a=new Audio("muzik/ozel.mp3");a.loop=true;a.preload="auto";a.addEventListener("canplaythrough",()=>{this.ok=true;},{once:true});a.addEventListener("error",()=>{this.ok=false;});this.el=a;}};
 SONG.init();
+// Suno ile üretilen sahne müzikleri (muzik/suno/*.mp3)
+const BGM={map:{title:'baslik',flight:'ucus',sunset:'ucus',gece:'ucus',cezayir:'ucus',chase:'kovala',boss:'kovala',saray:'saray',win:'final',end:'rap'},
+ els:{},cur:null,el:null,vol:.42,duck:1,ozel:false,
+ key(n){if(!n)return null;if(this.ozel&&SONG.ok)return 'ozel';return this.map[n]||null;},
+ get(k){if(k==='ozel')return SONG.el;if(!this.els[k]){const a=new Audio('muzik/suno/'+k+'.mp3');a.loop=true;a.preload='auto';this.els[k]=a;}return this.els[k];},
+ play(n){const k=this.key(n);if(k&&k===this.cur&&this.el&&!this.el.paused)return;this.fadeOut();this.cur=k;this.el=null;if(!k)return;
+  const a=this.get(k);this.el=a;if(k==='rap'||k==='final')a.currentTime=0;a.volume=0;if(!AU.c||AU.muted)return;a.play().catch(()=>{});},
+ fadeOut(){const a=this.el;if(!a||a.paused)return;const v0=a.volume;let i=0;const id=setInterval(()=>{i++;a.volume=Math.max(0,v0*(1-i/8));if(i>=8){clearInterval(id);if(a!==this.el)a.pause();}},40);},
+ stop(){this.fadeOut();this.cur=null;this.el=null;},
+ tick(dt){const a=this.el;if(!a)return;const t=this.vol*this.duck;a.volume=clamp(a.volume+(t-a.volume)*Math.min(1,dt*3),0,1);},
+ resume(){if(this.el&&this.el.paused&&!AU.muted)this.el.play().catch(()=>{});},pause(){if(this.el)this.el.pause();},
+ toggleOzel(){if(!SONG.ok)return false;this.ozel=!this.ozel;const n=MUS.want;this.cur=null;this.play(n);return true;}};
+// Suno giriş anlatımı (Aykut'un sesiyle)
+const INTRO={a:null,done:false,play(){if(AU.muted||!AU.c)return;if(!this.a)this.a=new Audio('muzik/suno/giris.mp3');const a=this.a;a.currentTime=0;a.volume=.95;a.play().then(()=>{BGM.duck=.25;}).catch(()=>{});a.onended=()=>{BGM.duck=1;};this.done=true;},
+ stop(){if(this.a&&!this.a.paused){this.a.pause();}BGM.duck=1;}};
 const MUS={on:false,want:null,
- start(n){this.want=n;this.on=false;if(SONG.ok&&SONG.el.paused&&!AU.muted)SONG.el.play().catch(()=>{});return;// sentez müzik kapalı: sadece yerel şarkı çalar
+ start(n){this.want=n;this.on=false;BGM.play(n);return;// sentez müzik kapalı: Suno parçaları çalar
  if(!AU.c)return;this.p=PATS[n];this.step=0;this.next=AU.c.currentTime+.05;this.on=true;},
- stop(){this.on=false;this.want=null;},
+ stop(){this.on=false;this.want=null;BGM.stop();},
  tick(){if(!this.on||!AU.c)return;const c=AU.c,p=this.p,sd=60/p.bpm/2;if(this.next<c.currentTime)this.next=c.currentTime+.05;
   while(this.next<c.currentTime+.15){const i=this.step,dl=this.next-c.currentTime;
    const m=p.mel[i%p.mel.length];if(m!=null)AU.tone('square',nf(m,p),null,sd*.9,.16,dl,AU.mu);
@@ -762,7 +776,7 @@ function drawTitleUI(){
   ctx.fillStyle=i===0?(SAVE.route>=SAVE.unl?'#7f8c8d':sel?'#e74c3c':'#a83a2e'):(sel?'#f39c12':'rgba(30,20,10,.62)');ctx.fill();ctx.strokeStyle=sel?'#fff':OL;ctx.lineWidth=sel?4:3;ctx.stroke();txt(it.t,0,1,i===0?24:18,'#fff');ctx.restore();});
  {const lock=SAVE.route>=SAVE.unl;txt(lock?'Önceki rotada karaya inince açılır':`Rota ${SAVE.route+1}/${ROUTES.length}${SAVE.wins[SAVE.route]?'  ★ Fermanlı':''}   •   Kanat: ${WINGS[SAVE.wing].n}`,MX,369,12,lock?'#ffb3a7':'#ffeaa7','center',OL,3);}
  const best=+localStorage.getItem('hez_best')||0;if(best)txt(`EN İYİ PUAN: ${best}`,MX,494,15,'#ffd166');
- txt(`↑↓ seç • ←→ rota • SPACE/ENTER   |   M: Ses   •   V: Seslendirme (${VO.label()})`,W/2,H-14,12,'#fff','center',OL,3);
+ txt(`↑↓ seç • ←→ rota • SPACE/ENTER   |   M: Ses   •   V: Seslendirme (${VO.label()})   •   I: Giriş`,W/2,H-14,12,'#fff','center',OL,3);
 }
 // ---------------- DÜKKÂN & GÖREVLER ----------------
 const SHOP={tab:0,sel:0};
@@ -968,7 +982,7 @@ function startEvent(){
  else if(e==='simit'){banner('SİMİTÇİ TEPSİYİ DÜŞÜRDÜ!','Simit ye, can bul! (Mahalleli de seviyor)');for(let i=0;i<5;i++){let it,tries=0;do{it={k:'simit',x:rand(80,880),y:rand(185,500),t:0};tries++;}while(tries<20&&OBST.some(o=>Math.hypot(o.x-it.x,(o.y-it.y)*1.6)<o.r+20));C.items.push(it);}}
  else if(e==='halay'){banner('DÜĞÜN HALAYI!','Halaya yakalanan oynar!');const dir=Math.random()<.5?1:-1;C.halay={y:clamp(P.y+rand(-60,60),190,480),x:dir>0?-40:W+40,dir,beat:0};}
 }
-function startWin(){C.win=true;C.e={t:0,ev:{}};MUS.stop();AU.play('whistle');C.cart=null;C.halay=null;C.proj=[];
+function startWin(){C.win=true;C.e={t:0,ev:{}};MUS.start('win');AU.play('whistle');C.cart=null;C.halay=null;C.proj=[];
  C.ulak={vo:'ulak',x:clamp(P.x<480?P.x+120:P.x-120,80,880),y:140,ty:clamp(P.y,200,380),arrived:false};if(Math.abs(C.ulak.x-480)<90)C.ulak.x=C.ulak.x<480?380:580;
  for(const v of C.vill){v.stun=0;v.dance=0;v.eat=0;v.wind=0;}}
 function changeZone(z){setZone(z);flash=.9;AU.play('dash');AU.play('whistle');
@@ -1397,7 +1411,7 @@ function sarayStory(){const s=C.saray;if(!s)return R.win;
  return[R.win[0],R.win[1],'Huzurdaki konuşman pek beğenilmedi. Hediye olarak bir terlik verildi.'];}
 const LOSE_T={dayak:'DAYAK YEDİN!',terlik:'TERLİKLENDİN!',karpuz:'KARPUZLANDIN!',boss:'MÜHÜRLENDİN!',havlu:'HAVLULANDIN!'};
 function startEnd(win){
- state='end';const surv=Math.min(SURV,C.t);stats.surv=surv;
+ state='end';MUS.start('end');const surv=Math.min(SURV,C.t);stats.surv=surv;
  const distScore=Math.round(stats.dist*.3),survScore=Math.round(surv*30),winBonus=win?2000+(C.saray?(C.saray.ok?1500:300):0):0,mult=WINGS[SAVE.wing].mult;
  const total=Math.round(Math.max(0,stats.score+distScore+survScore+winBonus)*mult);
  const prev=+localStorage.getItem('hez_best')||0;const isBest=total>prev;if(isBest)localStorage.setItem('hez_best',total);
@@ -1434,6 +1448,8 @@ let state='title';
 function drawMute(){ctx.setTransform(SC,0,0,SC,0,0);ctx.font='22px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=.85;ctx.fillText(AU.muted?'🔇':'🔊',W-24,H-24);ctx.globalAlpha=1;}
 function update(dt){
  if(hit('KeyM'))AU.toggle();
+ BGM.tick(dt);if(state==='title'){if(!INTRO.done&&AU.c&&!AU.muted)INTRO.play();if(hit('KeyI'))INTRO.play();}else INTRO.stop();
+ if(hit('KeyB')){if(BGM.toggleOzel())toast(BGM.ozel?'Müzik: Ağır Roman (yerel)':'Müzik: Oyun müzikleri');}
  if(hit('KeyV')){VO.cycle();toast(`Seslendirme: ${VO.label()}`);if(VO.mode)VO.speak('hez','Ses kontrol! Bir, iki!',3);}
  if(ptr.tap&&ptr.x>W-50&&ptr.y>H-50){AU.toggle();ptr.tap=false;ptr.dbl=false;}
  for(const t of TOASTS)t.life-=dt;TOASTS=TOASTS.filter(t=>t.life>0);
