@@ -48,6 +48,7 @@ init(){if(this.c){if(this.c.state==='suspended')this.c.resume();return;}
  this.m=c.createGain();this.m.gain.value=this.muted?0:.55;this.m.connect(c.destination);
  this.s=c.createGain();this.s.gain.value=.9;this.s.connect(this.m);
  this.mu=c.createGain();this.mu.gain.value=.15;this.mu.connect(this.m);
+ this.fx=c.createGain();this.fx.gain.value=.75;this.fx.connect(this.m);loadSFX(c);
  const len=c.sampleRate;const b=c.createBuffer(1,len,c.sampleRate);const d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.nb=b;
  if(MUS.want)MUS.start(MUS.want);
 },
@@ -55,7 +56,7 @@ toggle(){this.muted=!this.muted;if(this.m)this.m.gain.value=this.muted?0:.55;if(
 tone(type,f0,f1,dur,vol=.3,delay=0,dest){const c=this.c;if(!c)return null;const t=c.currentTime+Math.max(0,delay);const o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);if(f1&&f1!==f0)o.frequency.exponentialRampToValueAtTime(f1,t+dur);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+Math.min(.02,dur/3));g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(dest||this.s);o.start(t);o.stop(t+dur+.05);return o;},
 noise(dur,vol,ft,f0,f1,delay=0,q=1,dest){const c=this.c;if(!c)return;const t=c.currentTime+Math.max(0,delay);const src=c.createBufferSource();src.buffer=this.nb;src.loop=true;const f=c.createBiquadFilter();f.type=ft;f.Q.value=q;f.frequency.setValueAtTime(f0,t);if(f1)f.frequency.exponentialRampToValueAtTime(f1,t+dur);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0001,t+dur);src.connect(f);f.connect(g);g.connect(dest||this.s);src.start(t,Math.random()*.5);src.stop(t+dur+.05);},
 voice(dur,pitch){const c=this.c,t=c.currentTime;const o=c.createOscillator();o.type='sawtooth';const base=170*pitch;o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.8,t+dur*.3);o.frequency.linearRampToValueAtTime(base*1.5,t+dur*.7);o.frequency.linearRampToValueAtTime(base*.9,t+dur);const f=c.createBiquadFilter();f.type='bandpass';f.Q.value=4;f.frequency.setValueAtTime(700,t);f.frequency.linearRampToValueAtTime(1300,t+dur*.4);f.frequency.linearRampToValueAtTime(600,t+dur);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.4,t+.03);g.gain.setValueAtTime(.4,t+dur*.8);g.gain.exponentialRampToValueAtTime(.0001,t+dur);const l=c.createOscillator(),lg=c.createGain();l.frequency.value=7;lg.gain.value=base*.07;l.connect(lg);lg.connect(o.frequency);o.connect(f);f.connect(g);g.connect(this.s);o.start(t);l.start(t);o.stop(t+dur+.05);l.stop(t+dur+.05);},
-play(n){if(!this.c)return;const r=Math.random;switch(n){
+play(n){if(!this.c)return;if(SFXB[n]&&SFXB[n].length){const src=this.c.createBufferSource();src.buffer=choice(SFXB[n]);src.connect(this.fx);src.start();return;}const r=Math.random;switch(n){
  case 'flap':this.noise(.16,.35,'bandpass',600,1800,0,1.5);break;
  case 'jump':this.tone('square',300,600,.15,.12);this.noise(.2,.3,'bandpass',500,2000);break;
  case 'squawk':this.tone('sawtooth',1400+r()*300,700,.16,.12);this.tone('sawtooth',1300,600,.14,.09,.18);break;
@@ -86,6 +87,9 @@ play(n){if(!this.c)return;const r=Math.random;switch(n){
  case 'splat':this.noise(.25,.45,'lowpass',2500,300);this.tone('sine',300,120,.15,.2);break;
  case 'laugh':for(let i=0;i<7;i++){this.tone('sawtooth',300-i*14,240-i*14,.09,.2,i*.12);this.noise(.06,.15,'bandpass',900,1200,i*.12,3);}break;
 }}};
+// ---- ElevenLabs ses efektleri (sfx/); yüklenemezse yukarıdaki sentez sesler çalar ----
+const SFX_VER='el1',SFXB={};
+function loadSFX(c){fetch('sfx/manifest.json?v='+SFX_VER).then(r=>r.ok?r.json():null).then(m=>{if(!m)return;for(const n in m)for(const f of m[n])fetch('sfx/'+f+'.mp3?v='+SFX_VER).then(r=>r.arrayBuffer()).then(a=>c.decodeAudioData(a)).then(b=>{(SFXB[n]=SFXB[n]||[]).push(b);}).catch(()=>{});}).catch(()=>{});}
 // ---- seslendirme: mırıltı sentezi + tarayıcının Türkçe sesi ----
 AU.babble=function(text,pitch=1,rate=1){const c=this.c;if(!c||this.muted)return 0;
  const n=clamp(Math.round(text.replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ]/g,'').length/3.4),2,11);

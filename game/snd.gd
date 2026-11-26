@@ -8,7 +8,8 @@ const VRATE := {"teyze": 1.25, "hanim": 1.18, "cocuk": 1.35, "kiz": 1.3, "kasap"
 const MUS_VOL := 0.42
 
 var muted := false
-var sfx := {}           # ad -> AudioStreamWAV
+var sfx := {}           # ad -> AudioStreamWAV (sentez)
+var sfx_rec := {}       # ad -> [AudioStream] (ElevenLabs kayıtları)
 var sfx_players: Array[AudioStreamPlayer] = []
 var mus_a: AudioStreamPlayer
 var mus_b: AudioStreamPlayer
@@ -40,7 +41,17 @@ func _ready() -> void:
 	vo_mode = int(D.save_data.get("vo", 2))
 	var t0 := Time.get_ticks_msec()
 	_build_sfx()
-	print("[snd] efektler hazır: ", sfx.size(), " ses, ", Time.get_ticks_msec() - t0, " ms")
+	# ElevenLabs efekt kayıtları (sfx/); olan efektler sentez sesin yerine geçer
+	var sm := FileAccess.get_file_as_string("res://sfx/manifest.json")
+	var smj = JSON.parse_string(sm) if sm != "" else null
+	if smj is Dictionary:
+		for n in smj:
+			var arr: Array = []
+			for f in smj[n]:
+				var st = load("res://sfx/%s.mp3" % f)
+				if st is AudioStream: arr.append(st)
+			if not arr.is_empty(): sfx_rec[n] = arr
+	print("[snd] efektler hazır: ", sfx.size(), " sentez, ", sfx_rec.size(), " kayıt, ", Time.get_ticks_msec() - t0, " ms")
 
 func _process(dt: float) -> void:
 	var target := MUS_VOL * duck * (0.0 if muted else 1.0)
@@ -130,15 +141,26 @@ func hush() -> void:
 
 # ---------------------------------------------------------------- efektler
 func play(n: String) -> void:
-	if muted or not sfx.has(n):
+	if muted:
 		return
+	var st: AudioStream = null
+	var vol := 0.0
+	if sfx_rec.has(n):
+		var arr: Array = sfx_rec[n]
+		st = arr[randi() % arr.size()]
+		vol = -2.5
+	elif sfx.has(n):
+		st = sfx[n]
+	else:
+		return
+	var pl: AudioStreamPlayer = sfx_players[0]
 	for p in sfx_players:
 		if not p.playing:
-			p.stream = sfx[n]
-			p.play()
-			return
-	sfx_players[0].stream = sfx[n]
-	sfx_players[0].play()
+			pl = p
+			break
+	pl.stream = st
+	pl.volume_db = vol
+	pl.play()
 
 var _buf := PackedFloat32Array()
 
