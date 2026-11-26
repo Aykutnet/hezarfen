@@ -100,19 +100,21 @@ AU.babble=function(text,pitch=1,rate=1){const c=this.c;if(!c||this.muted)return 
 // [pitch, rate] her karakter için
 const VP={hez:[1,1.05],teyze:[1.6,1.25],amca:[.6,.85],cocuk:[2,1.35],kasap:[.4,.95],bekci:[.9,1.2],balikci:[.75,1],hanim:[1.4,1.15],berber:[1.15,1.35],hamamci:[.55,.9],imam:[.7,.8],boss:[.3,.85],ulak:[1.1,1.25],gull:[2,1.6],fish:[.2,.8],carpet:[1.25,1.1],kaptan:[.6,1],karpuzcu:[1.3,1.45],evliya:[1,.9],ressam:[1.25,.95],anlatici:[.95,1.05],kiz:[1.8,1.1],padisah:[.55,.8]};
 // ortak repliklerde konuşana göre oynatma hızı (perde de birlikte değişir)
+const VO_VER='el1';// ses dosyaları değişince artır (önbelleği kırar)
+const FEMALE_VO=new Set(['teyze','hanim','kiz']);
 const VRATE={teyze:1.25,hanim:1.18,cocuk:1.35,kiz:1.3,kasap:.85,amca:.9,bekci:1.08,balikci:.95,berber:1.12,hamamci:.88,imam:.9,boss:.82,ulak:1.05};
 const VO={mode:(()=>{const v=localStorage.getItem('hez_vo');return v==null?2:+v;})(),tr:null,cur:0,until:0,man:null,aud:null,
- init(){fetch('voices/manifest.json').then(r=>r.ok?r.json():null).then(m=>{this.man=m;}).catch(()=>{});
+ init(){fetch('voices/manifest.json?v='+VO_VER).then(r=>r.ok?r.json():null).then(m=>{this.man=m;}).catch(()=>{});
   if(!('speechSynthesis' in window))return;const pick=()=>{const vs=speechSynthesis.getVoices();this.tr=vs.find(v=>/^tr([-_]|$)/i.test(v.lang))||null;};pick();speechSynthesis.onvoiceschanged=pick;},
- label(){return this.mode===0?'Kapalı':this.mode===1?'Mırıltı':this.man?'Aykut\'un sesi':(this.tr?'Gerçek ses':'Gerçek ses (Türkçe ses yok, mırıltı)');},
+ label(){return this.mode===0?'Kapalı':this.mode===1?'Mırıltı':this.man?'Karakter sesleri':(this.tr?'Gerçek ses':'Gerçek ses (Türkçe ses yok, mırıltı)');},
  hush(){if(this.aud)this.aud.pause();if(window.speechSynthesis)speechSynthesis.cancel();},
  cycle(){this.mode=this.mode===0?2:this.mode-1;localStorage.setItem('hez_vo',this.mode);if(this.mode<2)this.hush();},
  speak(who,text,pri=1){if(!this.mode||AU.muted||!AU.c)return;text=String(text);if(!/[a-zA-ZçğıöşüÇĞİÖŞÜ]/.test(text))return;
   const p=VP[who]||VP.anlatici,now=performance.now(),busy=this.aud&&!this.aud.paused&&!this.aud.ended;
   if(busy&&pri<=this.cur)return;
-  if(this.mode===2&&this.man&&this.man[text]){const [f,o]=this.man[text];
+  if(this.mode===2&&this.man&&this.man[text]){const [f,o,ff]=this.man[text];
    if(busy)this.aud.pause();if(window.speechSynthesis)speechSynthesis.cancel();
-   const a=new Audio('voices/'+f+'.mp3');if(!o&&VRATE[who]){a.preservesPitch=false;a.mozPreservesPitch=false;a.webkitPreservesPitch=false;a.playbackRate=VRATE[who];}
+   const a=new Audio('voices/'+(!o&&ff&&FEMALE_VO.has(who)?ff:f)+'.mp3?v='+VO_VER);
    a.volume=1;a.play().catch(()=>{});this.aud=a;this.cur=pri;this.until=now;return;}
   if(busy)this.aud.pause();
   if(this.mode===2&&this.tr){const ss=speechSynthesis;if((ss.speaking||ss.pending)&&now<this.until+4000){if(pri<=this.cur)return;ss.cancel();}
