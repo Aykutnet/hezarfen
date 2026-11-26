@@ -18,6 +18,9 @@ var duck := 1.0
 var voice: AudioStreamPlayer
 var voice_pri := 0
 var intro: AudioStreamPlayer
+var amb_a: AudioStreamPlayer
+var amb_b: AudioStreamPlayer
+var amb_cur := ""
 var intro_done := false
 var manifest := {}
 var vo_mode := 2 # 0 kapalı, 2 karakter sesleri
@@ -32,6 +35,8 @@ func _ready() -> void:
 	mus_b = AudioStreamPlayer.new(); add_child(mus_b)
 	voice = AudioStreamPlayer.new(); add_child(voice)
 	intro = AudioStreamPlayer.new(); add_child(intro)
+	amb_a = AudioStreamPlayer.new(); add_child(amb_a)
+	amb_b = AudioStreamPlayer.new(); add_child(amb_b)
 	intro.finished.connect(func(): duck = 1.0)
 	var t := FileAccess.get_file_as_string("res://voices/manifest.json")
 	var j = JSON.parse_string(t) if t != "" else null
@@ -54,6 +59,15 @@ func _ready() -> void:
 	print("[snd] efektler hazır: ", sfx.size(), " sentez, ", sfx_rec.size(), " kayıt, ", Time.get_ticks_msec() - t0, " ms")
 
 func _process(dt: float) -> void:
+	# ortam sesleri: geçerli olan yükselir, diğeri söner
+	for p in [amb_a, amb_b]:
+		if not p.playing: continue
+		var tgt := (0.32 if p.has_meta("cur") else 0.0) * (0.0 if muted else 1.0)
+		var v: float = lerp(db_to_linear(p.volume_db), tgt, min(1.0, dt * 1.5))
+		if v < 0.002 and not p.has_meta("cur"):
+			p.stop()
+		else:
+			p.volume_db = linear_to_db(max(v, 0.0001))
 	var target := MUS_VOL * duck * (0.0 if muted else 1.0)
 	var cur := _cur_player()
 	if cur:
@@ -118,6 +132,22 @@ func toggle_mute() -> void:
 		voice.stop(); stop_intro()
 		for p in sfx_players:
 			p.stop()
+
+## sahne ortam sesi (sfx/amb_<ad>.mp3, döngü)
+func ambience(n: String) -> void:
+	if n == amb_cur: return
+	amb_cur = n
+	var old := amb_a if amb_a.has_meta("cur") else amb_b
+	var nw := amb_b if old == amb_a else amb_a
+	old.remove_meta("cur")
+	if n == "": return
+	var st = load("res://sfx/amb_%s.mp3" % n)
+	if not (st is AudioStreamMP3): return
+	st.loop = true
+	nw.stream = st
+	nw.volume_db = -60
+	nw.set_meta("cur", true)
+	nw.play()
 
 # ---------------------------------------------------------------- seslendirme
 func speak(who: String, text: String, pri := 1) -> void:

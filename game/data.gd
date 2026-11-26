@@ -90,7 +90,8 @@ const VT := {
 }
 const HEZ := {"body": "#9c3b26", "sleeve": "#7a2c1b", "sash": "#e3b23c", "hat": "kavuk", "beard": "#4a2c17", "must": "#4a2c17", "skin": "#f0c08a", "pants": "#5a3b22", "shoe": "#c0392b", "wings": true}
 
-const SAVE_PATH := "user://hez_save.json"
+## test modunda (komut satırında --frames varken) oyuncunun kaydına dokunulmaz
+var SAVE_PATH := "user://test_save.json" if " ".join(OS.get_cmdline_user_args()).contains("--frames") else "user://hez_save.json"
 var save_data := {}
 
 func _ready() -> void:

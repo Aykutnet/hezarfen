@@ -25,6 +25,7 @@ var OBST: Array = []
 var arenas := {}
 var SR := {}
 var E := {}
+var IMG := {}
 
 ## arka planı bir kez dokuya çizen yardımcı düğüm
 class Baker extends Node2D:
@@ -34,6 +35,9 @@ class Baker extends Node2D:
 
 func _ready() -> void:
 	super._ready()
+	for n in ["mini_ok", "mini_at", "son0", "son1", "son2", "son3", "son_dayak"]:
+		var t = load("res://img/%s.jpg" % n)
+		if t is Texture2D: IMG[n] = t
 	var sc: String = args.get("scene", "")
 	if sc == "landing":
 		state = "flight"; init_world(); reset_stats(); P.onTower = false; P.x = SHORE_X + 60; P.y = GROUND_U - 30; P.vx = 300.0; P.vy = 120.0; cam = P.x - 260; start_landing()
@@ -48,6 +52,11 @@ func _ready() -> void:
 			start_saray()
 
 # ---------------------------------------------------------------- yardımcılar
+func amb_for() -> String:
+	if state == "chase" or state == "end": return ["meydan", "carsi", "iskele"][C.get("zone", 0)]
+	if state == "saray": return "saray"
+	return super.amb_for()
+
 func dst(a: Dictionary, b: Dictionary) -> float:
 	return Vector2(a.x - b.x, a.y - b.y).length()
 
@@ -1229,12 +1238,17 @@ func start_end(win: bool) -> void:
 			rank = r[1]; break
 	E = {"win": win, "t": 0.0, "total": total, "akce": akce, "mult": mult, "best": max(prev, total), "isBest": is_best, "rank": rank,
 		"title": "FERMAN GELDİ!" if win else LOSE_T.get(cause, LOSE_T.dayak), "story": saray_story() if win else [lose_story, "Ama tarih onu yine de yazdı. Şalvar sahibine iade edildi."]}
+	E["img"] = IMG.get(("son%d" % D.save_data.route) if win else "son_dayak")
+	E["pic"] = 3.0 if E.img != null else 0.0
 	D.save()
 	if win: Snd.play("fanfare")
 
 func upd_end(dt: float) -> void:
 	E.t += dt
-	if E.t > 1.6 and (hit(["Space", "Enter"]) or ptr.tap): start_flight()
+	if E.pic > 0 and E.t < E.pic:
+		if E.t > .5 and (hit(["Space", "Enter"]) or ptr.tap): E.t = E.pic
+		return
+	if E.t - E.pic > 1.6 and (hit(["Space", "Enter"]) or ptr.tap): start_flight()
 
 # ---------------------------------------------------------------- çizim
 func draw_other() -> void:
@@ -1353,6 +1367,19 @@ func draw_mini(m: Dictionary) -> void:
 	if not m.done: art.bar(m.x - 30, m.y - 118, 60, 8, clamp(m.t / 5, 0, 1), "#e3b23c")
 
 func draw_portrait(p: Dictionary) -> void:
+	var im = IMG.get("mini_ok" if p.ok else "mini_at")
+	if im != null:
+		var x := 16.0
+		var y := 68.0
+		var w := 272.0
+		var ih := 153.0
+		var h := ih + 30
+		var kk: float = min(1.0, (3.6 - p.t) * 5)
+		c.save(); c.translate(x + w / 2, y + h / 2); c.scale(kk, kk); c.rotate(-.02); c.translate(-x - w / 2, -y - h / 2)
+		c.rr(x - 6, y - 6, w + 12, h + 12, 6); c.fill("#d4ac0d"); c.set_stroke(OL); c.lw = 2; c.stroke(); c.image(im, x, y, w, ih); c.stroke_rect(x, y, w, ih)
+		c.fill_rect(x, y + ih, w, h - ih, "#f6e7c8"); c.txt("Başyapıt! Saraya asılacak." if p.ok else "At gibi... Kıpırdadın!", x + w / 2, y + ih + 15, 14, "#4a2c17", "center", null)
+		c.restore()
+		return
 	var x := 20.0
 	var y := 60.0
 	var w := 120.0
@@ -1638,8 +1665,16 @@ func draw_saray() -> void:
 		c.save(); c.translate(W / 2, 445); c.scale(k, k); c.rotate(-.04); c.txt("SÜRGÜN İPTAL! +1500" if S.ok else "CEZAYİR'E SÜRGÜN! (+300)", 0, 0, 46, "#f1c40f" if S.ok else "#e74c3c", "center", OL, 8); c.restore()
 
 func draw_end_ui() -> void:
+	var et: float = E.t - E.pic
+	if E.img != null:
+		var z: float = 1 + min(E.t, 8.0) * .012
+		c.save(); c.translate(W / 2, H / 2); c.scale(z, z); c.image(E.img, -W / 2, -H / 2, W, H); c.restore()
+	if E.pic > 0 and et < 0:
+		c.fill_rect(0, H - 64, W, 64, "rgba(20,10,5,.35)"); c.txt(E.title, W / 2, H - 40, 30, "#ffd166" if E.win else "#ff6b6b", "center", OL, 6)
+		if E.t > .6: c.txt("SPACE: geç", W - 14, H - 12, 12, "#fff", "right", OL, 3)
+		return
 	c.fill_rect(0, 0, W, H, "rgba(20,10,5,.55)")
-	var k: float = min(1.0, E.t * 2.5)
+	var k: float = min(1.0, et * 2.5)
 	var oy: float = lerp(-520.0, 0.0, 1 - pow(1 - k, 3))
 	c.save(); c.translate(0, oy)
 	var x := 150.0
@@ -1652,8 +1687,8 @@ func draw_end_ui() -> void:
 	var sy := y + 92
 	for i in E.story.size():
 		var ls := c.wrap(E.story[i], 560, 16)
-		if E.t > .5 + i * 1.1:
-			c.save(); c.alpha = min(1.0, (E.t - .5 - i * 1.1) * 3)
+		if et > .5 + i * 1.1:
+			c.save(); c.alpha = min(1.0, (et - .5 - i * 1.1) * 3)
 			for j in ls.size(): c.txt(ls[j], W / 2, sy + j * 20, 16, "#4a2c17", "center", null)
 			c.restore()
 		sy += ls.size() * 20 + 4
@@ -1665,7 +1700,7 @@ func draw_end_ui() -> void:
 	c.txt("TOPLAM PUAN: %d" % E.total + ("  (x%s)" % E.mult if E.mult > 1 else ""), W / 2, y + 372, 32, "#ffd166", "center", OL, 6)
 	c.txt("★ YENİ REKOR! ★" if E.isBest else "En iyi: %d" % E.best, W / 2, y + 404, 16, "#e74c3c" if E.isBest else "#8a5a2b", "center", null)
 	c.txt("Unvanın: %s   •   +%d akçe (kese: %d)" % [E.rank, E.akce, D.save_data.akce], W / 2, y + 428, 17, "#4a2c17", "center", null)
-	if E.t > 1.6: c.txt("SPACE / TIKLA: Tekrar Uç   •   ESC: Menü", W / 2, y + 462, 16, "#2b1a10" if int(floor(T * 3)) % 2 else "#c0392b", "center", null)
+	if et > 1.6: c.txt("SPACE / TIKLA: Tekrar Uç   •   ESC: Menü", W / 2, y + 462, 16, "#2b1a10" if int(floor(T * 3)) % 2 else "#c0392b", "center", null)
 	c.restore()
 
 # ---------------------------------------------------------------- test botu

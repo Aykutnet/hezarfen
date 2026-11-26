@@ -318,6 +318,7 @@ func _bot() -> void:
 
 func update(dt: float) -> void:
 	if hit(["KeyM"]): Snd.toggle_mute(); toast("Ses: " + ("kapalı" if Snd.muted else "açık"))
+	Snd.ambience(amb_for())
 	if hit(["KeyV"]):
 		Snd.vo_mode = 0 if Snd.vo_mode == 2 else 2
 		D.save_data["vo"] = Snd.vo_mode; D.save()
@@ -652,6 +653,9 @@ func upd_landing(dt: float) -> void:
 		start_title()
 
 # alt sınıfın (chase.gd) dolduracağı kancalar
+func amb_for() -> String:
+	return "gece" if R.get("night", 0) else "deniz"
+
 func upd_other(_dt: float) -> void:
 	pass
 

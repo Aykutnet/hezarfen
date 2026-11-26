@@ -12,6 +12,7 @@ config_version=5
 
 config/name="Hezarfen – Uçtun da Ne Oldu?"
 run/main_scene="res://game/main.tscn"
+config/icon="res://img/simge.png"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 
 [autoload]

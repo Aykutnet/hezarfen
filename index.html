@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Hezarfen – Uçtun da Ne Oldu?</title>
+<link rel="icon" type="image/png" href="img/simge.png">
+<meta property="og:title" content="Hezarfen – Uçtun da Ne Oldu?">
+<meta property="og:description" content="Galata Kulesi'nden uç, Boğaz'ı geç, mahalleden kaç! Absürt komedi tarayıcı oyunu.">
+<meta property="og:image" content="https://aykutnet.github.io/hezarfen/img/kapak.jpg">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 html,body{margin:0;height:100%;background:#20152e;overflow:hidden}
 body{display:flex;align-items:center;justify-content:center}
@@ -48,7 +53,7 @@ init(){if(this.c){if(this.c.state==='suspended')this.c.resume();return;}
  this.m=c.createGain();this.m.gain.value=this.muted?0:.55;this.m.connect(c.destination);
  this.s=c.createGain();this.s.gain.value=.9;this.s.connect(this.m);
  this.mu=c.createGain();this.mu.gain.value=.15;this.mu.connect(this.m);
- this.fx=c.createGain();this.fx.gain.value=.75;this.fx.connect(this.m);loadSFX(c);
+ this.fx=c.createGain();this.fx.gain.value=.75;this.fx.connect(this.m);loadSFX(c);AMBI.load(c);
  const len=c.sampleRate;const b=c.createBuffer(1,len,c.sampleRate);const d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.nb=b;
  if(MUS.want)MUS.start(MUS.want);
 },
@@ -90,6 +95,17 @@ play(n){if(!this.c)return;if(SFXB[n]&&SFXB[n].length){const src=this.c.createBuf
 // ---- ElevenLabs ses efektleri (sfx/); yüklenemezse yukarıdaki sentez sesler çalar ----
 const SFX_VER='el1',SFXB={};
 function loadSFX(c){fetch('sfx/manifest.json?v='+SFX_VER).then(r=>r.ok?r.json():null).then(m=>{if(!m)return;for(const n in m)for(const f of m[n])fetch('sfx/'+f+'.mp3?v='+SFX_VER).then(r=>r.arrayBuffer()).then(a=>c.decodeAudioData(a)).then(b=>{(SFXB[n]=SFXB[n]||[]).push(b);}).catch(()=>{});}).catch(()=>{});}
+// ---- minyatür resimleri (img/*.jpg) ----
+const IMG={};for(const n of ['mini_ok','mini_at','son0','son1','son2','son3','son_dayak']){const im=new Image();im.src='img/'+n+'.jpg?v=1';IMG[n]=im;}
+const imgOk=im=>im&&im.complete&&im.naturalWidth>0;
+// ---- sahne ortam sesleri (sfx/amb_*.mp3, dikişsiz döngü) ----
+const AMBI={bufs:{},cur:null,src:null,g:null,
+ load(c){for(const n of ['deniz','meydan','carsi','iskele','gece','saray'])fetch('sfx/amb_'+n+'.mp3?v='+SFX_VER).then(r=>r.arrayBuffer()).then(a=>c.decodeAudioData(a)).then(b=>{this.bufs[n]=b;}).catch(()=>{});},
+ want(n){const c=AU.c;if(!c||n===this.cur||(n&&!this.bufs[n]))return;const t=c.currentTime;
+  if(this.src){const s=this.src,g=this.g;g.gain.setTargetAtTime(0,t,.4);setTimeout(()=>{try{s.stop();}catch(e){}},2500);}
+  this.cur=n;this.src=null;this.g=null;if(!n)return;
+  const s=c.createBufferSource();s.buffer=this.bufs[n];s.loop=true;const g=c.createGain();g.gain.value=0;g.gain.setTargetAtTime(.32,t,.6);s.connect(g);g.connect(AU.m);s.start();this.src=s;this.g=g;}};
+function ambFor(){if(state==='chase'||state==='end')return['meydan','carsi','iskele'][C.zone]||'meydan';if(state==='saray')return'saray';return R.night?'gece':'deniz';}
 // ---- seslendirme: mırıltı sentezi + tarayıcının Türkçe sesi ----
 AU.babble=function(text,pitch=1,rate=1){const c=this.c;if(!c||this.muted)return 0;
  const n=clamp(Math.round(text.replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ]/g,'').length/3.4),2,11);
@@ -1243,7 +1259,11 @@ function drawMini(m){shadow(m.x,m.y,13);drawPerson(m.x,m.y,{body:'#8e44ad',sleev
  ctx.fillStyle='#fdf6e3';ctx.strokeStyle=OL;ctx.lineWidth=2;ctx.fillRect(ex-18,m.y-74,36,30);ctx.strokeRect(ex-18,m.y-74,36,30);
  const n=Math.floor(clamp(m.t/5,0,1)*6);const cols=['#c0392b','#2980b9','#f1c40f','#27ae60','#e67e22','#8e44ad'];for(let i=0;i<n;i++)circ(ex-12+(i%3)*12,m.y-66+Math.floor(i/3)*12,4,cols[i]);
  if(!m.done){const k=clamp(m.t/5,0,1);bar(m.x-30,m.y-118,60,8,k,'#e3b23c');}}
-function drawPortrait(p){const x=20,y=60,w=120,h=140,k=Math.min(1,(3.6-p.t)*5);ctx.save();ctx.translate(x+w/2,y+h/2);ctx.scale(k,k);ctx.translate(-x-w/2,-y-h/2);
+function drawPortrait(p){const im=IMG[p.ok?'mini_ok':'mini_at'];if(!imgOk(im))return drawPortraitOld(p);
+ const x=16,y=68,w=272,ih=153,h=ih+30,k=Math.min(1,(3.6-p.t)*5);ctx.save();ctx.translate(x+w/2,y+h/2);ctx.scale(k,k);ctx.rotate(-.02);ctx.translate(-x-w/2,-y-h/2);
+ rr(x-6,y-6,w+12,h+12,6);ctx.fillStyle='#d4ac0d';ctx.fill();ctx.strokeStyle=OL;ctx.lineWidth=2;ctx.stroke();ctx.drawImage(im,x,y,w,ih);ctx.strokeRect(x,y,w,ih);
+ ctx.fillStyle='#f6e7c8';ctx.fillRect(x,y+ih,w,h-ih);txt(p.ok?'Başyapıt! Saraya asılacak.':'At gibi... Kıpırdadın!',x+w/2,y+ih+15,14,'#4a2c17','center',null);ctx.restore();}
+function drawPortraitOld(p){const x=20,y=60,w=120,h=140,k=Math.min(1,(3.6-p.t)*5);ctx.save();ctx.translate(x+w/2,y+h/2);ctx.scale(k,k);ctx.translate(-x-w/2,-y-h/2);
  rr(x-6,y-6,w+12,h+12,6);ctx.fillStyle='#d4ac0d';ctx.fill();ctx.strokeStyle=OL;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#f6e7c8';ctx.fillRect(x,y,w,h-24);ctx.strokeRect(x,y,w,h-24);
  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h-24);ctx.clip();
  if(p.ok)drawPerson(x+w/2+8,y+h-34,hezOpts({s:.82,f:1,wa:.4,wl:56,mood:'happy',salvar:true,arm:-2.7}));
@@ -1459,23 +1479,27 @@ function startEnd(win){
   dayak:choice(['Hezarfen o gün bir kez daha uçtu: mahallenin bir ucundan öbür ucuna.','Hezarfen bir hafta kanatla değil, sedyeyle taşındı.','Mahallelinin dayak tekniği o gün tarihe geçti.'])}[cause];
  E={win,t:0,total,akce,mult,best:Math.max(prev,total),isBest,rank:RANKS.find(r=>total<r[0])[1],title:win?'FERMAN GELDİ!':LOSE_T[cause]||LOSE_T.dayak,
   story:win?sarayStory():[loseStory,'Ama tarih onu yine de yazdı. Şalvar sahibine iade edildi.']};
+ E.img=IMG[win?'son'+SAVE.route:'son_dayak'];E.pic=imgOk(E.img)?3:0;
  if(win)AU.play('fanfare');
 }
-function updEnd(dt){E.t+=dt;if(E.t>1.6&&(hit('Space','Enter')||ptr.tap))startFlight();}
-function drawEndUI(){ctx.fillStyle='rgba(20,10,5,.55)';ctx.fillRect(0,0,W,H);
- const k=Math.min(1,E.t*2.5),oy=lerp(-520,0,1-Math.pow(1-k,3));
+function updEnd(dt){E.t+=dt;if(E.pic&&E.t<E.pic){if(E.t>.5&&(hit('Space','Enter')||ptr.tap))E.t=E.pic;return;}if(E.t-(E.pic||0)>1.6&&(hit('Space','Enter')||ptr.tap))startFlight();}
+function drawEndUI(){const et=E.t-(E.pic||0);
+ if(E.img&&imgOk(E.img)){const z=1+Math.min(E.t,8)*.012;ctx.save();ctx.translate(W/2,H/2);ctx.scale(z,z);ctx.drawImage(E.img,-W/2,-H/2,W,H);ctx.restore();}
+ if(E.pic&&et<0){ctx.fillStyle='rgba(20,10,5,.35)';ctx.fillRect(0,H-64,W,64);txt(E.title,W/2,H-40,30,E.win?'#ffd166':'#ff6b6b','center',OL,6);if(E.t>.6)txt('SPACE: geç',W-14,H-12,12,'#fff','right',OL,3);return;}
+ ctx.fillStyle='rgba(20,10,5,.55)';ctx.fillRect(0,0,W,H);
+ const k=Math.min(1,et*2.5),oy=lerp(-520,0,1-Math.pow(1-k,3));
  ctx.save();ctx.translate(0,oy);
  const x=150,w=660,y=24,h=492;
  rr(x,y,w,h,18);ctx.fillStyle='#f3e2b8';ctx.fill();ctx.strokeStyle='#8a5a2b';ctx.lineWidth=6;ctx.stroke();
  rr(x+12,y+12,w-24,h-24,12);ctx.strokeStyle='rgba(138,90,43,.4)';ctx.lineWidth=2;ctx.stroke();
  txt(E.title,W/2,y+50,44,E.win?'#e3b23c':'#e74c3c','center',OL,8);
- {const sf=`italic bold 16px ${FONT}`;let sy=y+92;E.story.forEach((s,i)=>{const ls=wrap(s,560,sf);if(E.t>.5+i*1.1){ctx.globalAlpha=Math.min(1,(E.t-.5-i*1.1)*3);ls.forEach((l,j)=>{ctx.font=sf;ctx.fillStyle='#4a2c17';ctx.textAlign='center';ctx.fillText(l,W/2,sy+j*20);});ctx.globalAlpha=1;}sy+=ls.length*20+4;});}
+ {const sf=`italic bold 16px ${FONT}`;let sy=y+92;E.story.forEach((s,i)=>{const ls=wrap(s,560,sf);if(et>.5+i*1.1){ctx.globalAlpha=Math.min(1,(et-.5-i*1.1)*3);ls.forEach((l,j)=>{ctx.font=sf;ctx.fillStyle='#4a2c17';ctx.textAlign='center';ctx.fillText(l,W/2,sy+j*20);});ctx.globalAlpha=1;}sy+=ls.length*20+4;});}
  const rows=[['Rota',R.n],['Uçuş mesafesi',`${stats.dist} m`+(stats.landed?(stats.hard?'  (yüz üstü iniş)':'  (kusursuz iniş)'):'')],['Hayatta kalma',`${stats.surv.toFixed(1)} sn`],['Sersemletilen mahalleli',stats.stuns],['Yenen dayak',stats.hits],['Yenen simit',stats.simits]];
  rows.forEach((r,i)=>{const yy=y+196+i*27;ctx.fillStyle=i%2?'rgba(138,90,43,.08)':'rgba(138,90,43,.16)';ctx.fillRect(x+60,yy-12,w-120,25);txt(r[0],x+76,yy+1,16,'#4a2c17','left',null);txt(String(r[1]),x+w-76,yy+1,16,'#8a3b12','right',null);});
  txt(`TOPLAM PUAN: ${E.total}`+(E.mult>1?`  (x${E.mult})`:''),W/2,y+372,32,'#ffd166','center',OL,6);
  txt(E.isBest?'★ YENİ REKOR! ★':`En iyi: ${E.best}`,W/2,y+404,16,E.isBest?'#e74c3c':'#8a5a2b','center',null);
  txt(`Unvanın: ${E.rank}   •   +${E.akce} akçe (kese: ${SAVE.akce})`,W/2,y+428,17,'#4a2c17','center',null);
- if(E.t>1.6)txt('SPACE / TIKLA: Tekrar Uç   •   ESC: Menü (dükkân)',W/2,y+462,16,Math.floor(T*3)%2?'#2b1a10':'#c0392b','center',null);
+ if(et>1.6)txt('SPACE / TIKLA: Tekrar Uç   •   ESC: Menü (dükkân)',W/2,y+462,16,Math.floor(T*3)%2?'#2b1a10':'#c0392b','center',null);
  ctx.restore();}
 
 // =====================================================================
@@ -1485,6 +1509,7 @@ let state='title';
 function drawMute(){ctx.setTransform(SC,0,0,SC,0,0);ctx.font='22px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=.85;ctx.fillText(AU.muted?'🔇':'🔊',W-24,H-24);ctx.globalAlpha=1;}
 function update(dt){
  if(hit('KeyM'))AU.toggle();
+ AMBI.want(ambFor());
  BGM.tick(dt);if(state==='title'){if(!INTRO.done&&AU.c&&!AU.muted)INTRO.play();if(hit('KeyI'))INTRO.play();}else INTRO.stop();
  if(hit('KeyB')){if(BGM.toggleOzel())toast(BGM.ozel?'Müzik: Ağır Roman (yerel)':'Müzik: Oyun müzikleri');}
  if(hit('KeyV')){VO.cycle();toast(`Seslendirme: ${VO.label()}`);if(VO.mode)VO.speak('hez','Ses kontrol! Bir, iki!',3);}
